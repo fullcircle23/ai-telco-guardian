@@ -1,0 +1,23 @@
+
+version: "3.9"
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.api
+    env_file:
+      - ../.env
+    volumes:
+      - ../rag/chroma:/srv/rag/chroma
+    ports:
+      - "8000:8000"
+  app:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.app
+    environment:
+      - API_BASE_URL=http://api:8000
+    ports:
+      - "8501:8501"
+    depends_on:
+      - api

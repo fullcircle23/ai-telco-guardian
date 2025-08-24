@@ -1,0 +1,14 @@
+
+{
+  "name": "TS-Guard",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
+  },
+  "postCreateCommand": "python -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt && pre-commit install || true",
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-python.python","ms-python.vscode-pylance","ms-toolsai.jupyter","GitHub.vscode-pull-request-github","eamodio.gitlens"]
+    }
+  }
+}

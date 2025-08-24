@@ -1,0 +1,12 @@
+
+FROM python:3.11-slim
+WORKDIR /srv
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+COPY api ./api
+COPY ml ./ml
+COPY rag ./rag
+COPY data ./data
+ENV API_HOST=0.0.0.0 API_PORT=8000
+EXPOSE 8000
+CMD ["uvicorn", "api.main:APP", "--host", "0.0.0.0", "--port", "8000", "--log-level","info"]
