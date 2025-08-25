@@ -1,7 +1,15 @@
+# Normalize text files to LF
 * text=auto eol=lf
-*.png binary
-*.jpg binary
-*.jpeg binary
-*.pdf binary
-*.joblib binary
-*.pkl binary
+
+# Images and binary blobs
+*.png     binary
+*.jpg     binary
+*.jpeg    binary
+*.pdf     diff=pdf
+*.joblib  diff=joblib
+*.pkl     diff=pkl
+
+# Common office docs
+*.docx    binary
+*.pptx    binary
+*.xlsx    binary
