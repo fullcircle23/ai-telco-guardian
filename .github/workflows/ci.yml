@@ -1,53 +1,22 @@
-
 name: CI
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+on: [push, pull_request]
 jobs:
-  build-test:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install deps
+          cache: 'pip'
+      - name: Install
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt pytest pre-commit
-      - name: Lint
-        run: pre-commit run --all-files || true
-      - name: Train model (quick)
-        run: python ml/train_tabular.py
-      - name: Build RAG index (ok if empty)
-        run: python rag/build_index.py || true
-      - name: Show workspace layout & import diagnostics (bash)
-        shell: bash
-        run: |
-          set -euxo pipefail
-          echo "GITHUB_WORKSPACE: ${GITHUB_WORKSPACE}"
-          echo "CWD: $(pwd)"
-          ls -la
-          echo ":: Quick tree (one level)"
-          find . -maxdepth 2 -type d -print | sed 's|^\./||' | sort
-
-      - name: Python import diagnostics (python)
-        shell: python
-        run: |
-          import os, sys, pkgutil
-          print("sys.path[0]:", sys.path[0])
-          print("Top-level has 'api' dir:", os.path.isdir("api"))
-          try:
-              import api
-              print("import api: OK; module file:", getattr(api, "__file__", None))
-          except Exception as e:
-              print("import api failed:", repr(e))
-          print("Tests discovered at top level:",
-                [m.name for m in pkgutil.iter_modules() if m.name.startswith("tests")])
-      - name: Run tests
-        run: |
-          export PYTHONPATH=.
-          pytest
-
+          python -m pip install -U pip wheel setuptools
+          pip install -r requirements.txt
+          pip install -e .
+      - name: Smoke import
+        run: python - <<'PY'
+          import ts_guard; print("ts_guard:", ts_guard.__file__)
+          PY
+      - name: Tests
+        run: python -m pytest -vv --maxfail=1

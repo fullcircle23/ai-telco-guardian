@@ -1,6 +1,6 @@
 
 import os, joblib, pandas as pd
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
@@ -10,6 +10,23 @@ from .rag_qa import answer as rag_answer, search as rag_search
 
 load_dotenv()
 APP = FastAPI(title="TS-Guard API")
+
+def _lazy_import_rag():
+    try:
+        from .rag_qa import answer as rag_answer, search as rag_search
+        return rag_answer, rag_search
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"RAG backend unavailable: {e}")
+
+@APP.get("/rag/search")
+def rag_search_endpoint(q: str, k: int = 5):
+    rag_answer, rag_search = _lazy_import_rag()
+    return rag_search(q=q, k=k)
+
+@APP.get("/rag/answer")
+def rag_answer_endpoint(q: str, k: int = 3):
+    rag_answer, rag_search = _lazy_import_rag()
+    return rag_answer(q=q, k=k)
 
 APP.add_middleware(
     CORSMiddleware,

@@ -1,5 +1,19 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-addopts = "-q"
-pythonpath = ["."]
+[project]
+name = "ts-guard"
+version = "0.1.0"
+requires-python = ">=3.10"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[project.optional-dependencies]
+rag = [
+  "torch>=2.4",
+  "sentence-transformers>=3.0",
+  "chromadb==0.5.5",
+]
+
