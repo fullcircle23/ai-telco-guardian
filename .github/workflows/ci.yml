@@ -15,8 +15,10 @@ jobs:
           pip install -r requirements.txt
           pip install -e .
       - name: Smoke import
-        run: python - <<'PY'
-          import ts_guard; print("ts_guard:", ts_guard.__file__)
+        run: |
+          python - <<'PY'
+          import ts_guard
+          print("ts_guard:", ts_guard.__file__)
           PY
       - name: Tests
         run: python -m pytest -vv --maxfail=1
