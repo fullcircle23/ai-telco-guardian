@@ -1,49 +1,63 @@
+# src/ts_guard/api/main.py
+from __future__ import annotations
 
-import os, joblib, pandas as pd
+import os
+import joblib
+import pandas as pd
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
-from langdetect import detect
+
 from .llm_provider import chat
-from .rag_qa import answer as rag_answer, search as rag_search
 
 load_dotenv()
-APP = FastAPI(title="TS-Guard API")
 
-def _lazy_import_rag():
+APP = FastAPI()
+APP.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_credentials=True,
+)
+
+# ---------- Lazy helpers ----------
+
+def _get_rag():
+    """Import RAG only when an endpoint needs it."""
     try:
         from .rag_qa import answer as rag_answer, search as rag_search
         return rag_answer, rag_search
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"RAG backend unavailable: {e}")
 
-@APP.get("/rag/search")
-def rag_search_endpoint(q: str, k: int = 5):
-    rag_answer, rag_search = _lazy_import_rag()
-    return rag_search(q=q, k=k)
+def _detect_lang(text: str) -> str:
+    """Best-effort language detection; default to 'en' if unavailable/fails."""
+    try:
+        from langdetect import detect as _detect
+    except Exception:
+        return "en"
+    try:
+        return _detect(text or "")
+    except Exception:
+        return "en"
 
-@APP.get("/rag/answer")
-def rag_answer_endpoint(q: str, k: int = 3):
-    rag_answer, rag_search = _lazy_import_rag()
-    return rag_answer(q=q, k=k)
-
-APP.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:8501","http://127.0.0.1:8501","*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# ---------- Model utilities ----------
 
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "ml", "model.joblib")
-
 _model = None
+
 def _load_model():
     global _model
     if _model is None:
-        _model = joblib.load(MODEL_PATH)
+        try:
+            _model = joblib.load(MODEL_PATH)
+        except Exception as e:
+            raise HTTPException(status_code=503, detail=f"Model not available: {e}")
     return _model
+
+# ---------- Schemas ----------
 
 class CallMeta(BaseModel):
     caller: str = Field(..., examples=["+60123456789"])
@@ -60,6 +74,10 @@ class RiskResponse(BaseModel):
     risk_score: float
     risk_label: str
 
+class TriageRequest(BaseModel):
+    complaint_text: str
+    meta: CallMeta | None = None
+
 class TriageJSON(BaseModel):
     summary: str
     scam_type: str
@@ -71,7 +89,10 @@ class TriageJSON(BaseModel):
 def risk_label_from_proba(proba: float) -> str:
     return "high" if proba >= 0.7 else "medium" if proba >= 0.4 else "low"
 
-@APP.get("/healthz")
+# ---------- Routes ----------
+
+@APP.get("/health", tags=["health"])
+@APP.get("/healthz", tags=["health"])
 def health():
     return {"ok": True}
 
@@ -79,33 +100,38 @@ def health():
 def predict_call_risk(meta: CallMeta):
     model = _load_model()
     df = pd.DataFrame([meta.model_dump()])
-    X = df[[
-        "duration_sec","hour_of_day","is_outbound",
-        "recent_calls_from_caller_24h","pct_answered_last_7d","complaints_last_7d"
-    ]].astype({"is_outbound": int})
-    proba = model.predict_proba(X)[0,1]
-    label = risk_label_from_proba(float(proba))
-    return {"risk_score": float(proba), "risk_label": label}
-
-class TriageRequest(BaseModel):
-    complaint_text: str
-    meta: CallMeta
+    X = df[
+        [
+            "duration_sec",
+            "hour_of_day",
+            "is_outbound",
+            "recent_calls_from_caller_24h",
+            "pct_answered_last_7d",
+            "complaints_last_7d",
+        ]
+    ].astype({"is_outbound": int})
+    proba = float(model.predict_proba(X)[0, 1])
+    return {"risk_score": proba, "risk_label": risk_label_from_proba(proba)}
 
 @APP.post("/triage")
 def triage(req: TriageRequest):
-    try:
-        lang = detect(req.complaint_text or "en")
-    except:
-        lang = "en"
+    rag_answer, _ = _get_rag()
+    lang = _detect_lang(req.complaint_text)
     out = rag_answer(req.complaint_text, lang_hint=lang, chat_fn=chat)
     try:
-        validated = TriageJSON.model_validate(out)
-        tri = validated.model_dump()
+        tri = TriageJSON.model_validate(out).model_dump()
     except Exception:
         tri = {"raw": out}
     return {"triage": tri, "language": lang}
 
-@APP.get("/search_kb")
-def search_kb(q: str):
-    res = rag_search(q, k=5)
-    return {"results": [{"snippet": s, "source": src} for s,src in res]}
+@APP.get("/rag/search")
+def rag_search_endpoint(q: str, k: int = 5):
+    _, rag_search = _get_rag()
+    res = rag_search(q=q, k=k)
+    return {"results": [{"snippet": s, "source": src} for s, src in res]}
+
+@APP.get("/rag/answer")
+def rag_answer_endpoint(q: str, k: int = 3):
+    rag_answer, _ = _get_rag()
+    lang = _detect_lang(q)
+    return {"answer": rag_answer(q, k=k, lang_hint=lang, chat_fn=chat)}
