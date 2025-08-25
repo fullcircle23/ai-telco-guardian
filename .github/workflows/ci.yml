@@ -24,4 +24,8 @@ jobs:
       - name: Build RAG index (ok if empty)
         run: python rag/build_index.py || true
       - name: Run tests
-        run: pytest
+        working-directory: ai-telco-guardian
+        run: |
+          export PYTHONPATH=.
+          pytest
+
