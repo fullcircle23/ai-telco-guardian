@@ -1,15 +1,36 @@
-
 repos:
-  - repo: https://github.com/psf/black
-    rev: 24.8.0
+  # Basic hygiene
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
     hooks:
-      - id: black
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-toml
+
+  # Sort imports first
   - repo: https://github.com/pycqa/isort
     rev: 5.13.2
     hooks:
       - id: isort
+        args: ["--profile=black", "--filter-files"]
+
+  # Then format
+  - repo: https://github.com/psf/black
+    rev: 24.8.0
+    hooks:
+      - id: black
+        args: ["--target-version=py311"]
+
+  # Lint last
   - repo: https://github.com/pycqa/flake8
     rev: 7.1.1
     hooks:
       - id: flake8
         additional_dependencies: ["flake8-bugbear"]
+        args:
+          # Black-compatible; prefer B950 over E501
+          - "--max-line-length=88"
+          - "--extend-ignore=E203,W503"
+          - "--extend-select=B950"

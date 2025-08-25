@@ -17,3 +17,17 @@ rag = [
   "chromadb==0.5.5",
 ]
 
+[tool.black]
+target-version = ["py311"]
+line-length = 88
+
+[tool.isort]
+profile = "black"
+line_length = 88
+known_first_party = ["ts_guard"]
+
+[tool.flake8]
+max-line-length = 88
+extend-ignore = ["E203", "W503"]
+extend-select = ["B950"]
+
