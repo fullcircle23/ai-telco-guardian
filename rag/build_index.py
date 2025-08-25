@@ -17,21 +17,28 @@ def load_docs():
                 txt = page.extract_text() or ""
                 if txt.strip():
                     docs.append((txt, f"{os.path.basename(path)}#p{i+1}"))
-        elif path.lower().endswith((".md",".txt",".rtf")):
+        elif path.lower().endswith((".md",".txt",".rtf",".markdown")):
             with open(path, "r", encoding="utf-8", errors="ignore") as f:
                 docs.append((f.read(), os.path.basename(path)))
     return docs
 
-def chunk(text, n=700, overlap=120):
-    words = text.split()
+def chunk(text, n=1500, overlap=250):
     i = 0
-    while i < len(words):
-        yield " ".join(words[i:i+n])
-        i += (n - overlap)
+    L = len(text)
+    while i < L:
+        yield text[i:i+n]
+        i += max(1, n - overlap)
+    return
 
 def main():
     os.makedirs(CHROMA_DIR, exist_ok=True)
     client = chromadb.PersistentClient(path=CHROMA_DIR)
+    try:
+        existing = [c.name for c in client.list_collections()]
+        if "kb" in existing:
+            client.delete_collection("kb")
+    except Exception:
+        pass
     coll = client.get_or_create_collection("kb")
     model = SentenceTransformer(EMBED_MODEL)
     docs = load_docs()

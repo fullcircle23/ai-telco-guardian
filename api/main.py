@@ -1,6 +1,7 @@
 
 import os, joblib, pandas as pd
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from langdetect import detect
@@ -9,6 +10,15 @@ from .rag_qa import answer as rag_answer, search as rag_search
 
 load_dotenv()
 APP = FastAPI(title="TS-Guard API")
+
+APP.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:8501","http://127.0.0.1:8501","*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "ml", "model.joblib")
 
 _model = None
@@ -33,6 +43,17 @@ class RiskResponse(BaseModel):
     risk_score: float
     risk_label: str
 
+class TriageJSON(BaseModel):
+    summary: str
+    scam_type: str
+    actions: list[str]
+    sms_en: str
+    sms_ms: str
+    confidence: float
+
+def risk_label_from_proba(proba: float) -> str:
+    return "high" if proba >= 0.7 else "medium" if proba >= 0.4 else "low"
+
 @APP.get("/healthz")
 def health():
     return {"ok": True}
@@ -46,7 +67,7 @@ def predict_call_risk(meta: CallMeta):
         "recent_calls_from_caller_24h","pct_answered_last_7d","complaints_last_7d"
     ]].astype({"is_outbound": int})
     proba = model.predict_proba(X)[0,1]
-    label = "high" if proba >= 0.7 else "medium" if proba >= 0.4 else "low"
+    label = risk_label_from_proba(float(proba))
     return {"risk_score": float(proba), "risk_label": label}
 
 class TriageRequest(BaseModel):
@@ -60,7 +81,12 @@ def triage(req: TriageRequest):
     except:
         lang = "en"
     out = rag_answer(req.complaint_text, lang_hint=lang, chat_fn=chat)
-    return {"triage": out, "language": lang}
+    try:
+        validated = TriageJSON.model_validate(out)
+        tri = validated.model_dump()
+    except Exception:
+        tri = {"raw": out}
+    return {"triage": tri, "language": lang}
 
 @APP.get("/search_kb")
 def search_kb(q: str):

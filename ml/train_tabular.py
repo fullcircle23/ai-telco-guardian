@@ -1,5 +1,5 @@
 
-import os, pandas as pd, numpy as np, joblib
+import os, pandas as pd, numpy as np, joblib, json, time
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_auc_score, classification_report
@@ -47,6 +47,14 @@ def main():
     print("AUC:", round(auc, 3))
     print(classification_report(yte, (proba>0.5).astype(int)))
     joblib.dump(clf, MODEL_PATH)
+    meta = {
+      "timestamp": int(time.time()),
+      "features": list(X.columns),
+      "roc_auc": float(auc),
+      "thresholds": {"low": 0.4, "high": 0.7}
+    }
+    with open(os.path.join(os.path.dirname(MODEL_PATH), "model_meta.json"), "w") as f:
+        json.dump(meta, f, indent=2)
     print("Saved:", MODEL_PATH)
 
 if __name__ == "__main__":

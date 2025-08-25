@@ -3,6 +3,13 @@
 
 A real, runnable reference system that blends a **tabular ML risk model** with **LLM‑powered triage and RAG**, exposed via **FastAPI** and a **Streamlit** UI.
 
+## What's new in this patched build
+- ✅ **CORS** enabled for local UI ↔ API
+- ✅ **Structured JSON triage** (summary, scam_type, actions, sms_en, sms_ms, confidence)
+- ✅ **RAG rebuild hygiene** (clear collection) + char-based chunking
+- ✅ Streamlit shows triage with `st.json(...)`
+- ✅ Added thresholds unit test
+
 ## Quick Start
 
 ```bash
@@ -20,17 +27,6 @@ streamlit run app/streamlit_app.py
 ```bash
 cd infra && docker-compose up --build
 ```
-
-## GitHub Setup
-```bash
-git init
-git add .
-git commit -m "feat: init TS-Guard (LLM+RAG+tabular ML)"
-git branch -M main
-git remote add origin git@github.com:FULLCIRCLE23/ai-telco-guardian.git
-git push -u origin main
-```
-Then open **Actions** to see CI.
 
 ## Structure
 ```

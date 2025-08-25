@@ -1,8 +1,10 @@
 
 import os, requests, streamlit as st
-API_BASE = os.getenv("API_BASE_URL", "http://localhost:8000")
+API_BASE_DEFAULT = os.getenv("API_BASE_URL", "http://localhost:8000")
 st.set_page_config(page_title="TS-Guard", layout="wide")
 st.title("TS-Guard: Telco Scam Early‑Warning & Triage")
+with st.sidebar:
+    API_BASE = st.text_input("API Base URL", API_BASE_DEFAULT)
 tabs = st.tabs(["📊 Risk Monitor", "🛟 Agent Triage", "📚 Knowledge Search"])
 with tabs[0]:
     st.subheader("Quick Risk Score")
@@ -28,7 +30,8 @@ with tabs[0]:
             data = r.json()
             st.metric("Risk Score", f"{data['risk_score']:.2f}", data["risk_label"])
         else:
-            st.error(r.text)
+            st.error(f"Error {r.status_code}: {r.text[:300]}")
+
 with tabs[1]:
     st.subheader("LLM‑powered Triage (EN + BM)")
     complaint = st.text_area("Complaint / transcript", height=180,
@@ -42,10 +45,11 @@ with tabs[1]:
         r = requests.post(f"{API_BASE}/triage", json={"complaint_text": complaint, "meta": meta}, timeout=120)
         if r.ok:
             out = r.json()
-            st.write(out["triage"])
+            st.json(out["triage"])
             st.caption(f"Detected language: {out.get('language','n/a')}")
         else:
-            st.error(r.text)
+            st.error(f"Error {r.status_code}: {r.text[:300]}")
+
 with tabs[2]:
     st.subheader("Search internal KB")
     q = st.text_input("Query", "tac code scam escalation")
@@ -56,4 +60,4 @@ with tabs[2]:
                 st.write("•", item["snippet"])
                 st.caption(item.get("source","kb"))
         else:
-            st.error(r.text)
+            st.error(f"Error {r.status_code}: {r.text[:300]}")
