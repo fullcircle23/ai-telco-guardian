@@ -23,8 +23,30 @@ jobs:
         run: python ml/train_tabular.py
       - name: Build RAG index (ok if empty)
         run: python rag/build_index.py || true
+      - name: Show workspace layout & import diagnostics (bash)
+        shell: bash
+        run: |
+          set -euxo pipefail
+          echo "GITHUB_WORKSPACE: ${GITHUB_WORKSPACE}"
+          echo "CWD: $(pwd)"
+          ls -la
+          echo ":: Quick tree (one level)"
+          find . -maxdepth 2 -type d -print | sed 's|^\./||' | sort
+
+      - name: Python import diagnostics (python)
+        shell: python
+        run: |
+          import os, sys, pkgutil
+          print("sys.path[0]:", sys.path[0])
+          print("Top-level has 'api' dir:", os.path.isdir("api"))
+          try:
+              import api
+              print("import api: OK; module file:", getattr(api, "__file__", None))
+          except Exception as e:
+              print("import api failed:", repr(e))
+          print("Tests discovered at top level:",
+                [m.name for m in pkgutil.iter_modules() if m.name.startswith("tests")])
       - name: Run tests
-        working-directory: ai-telco-guardian
         run: |
           export PYTHONPATH=.
           pytest
