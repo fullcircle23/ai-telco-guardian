@@ -1,5 +1,5 @@
-
 from ts_guard.api.main import risk_label_from_proba
+
 
 def test_thresholds():
     assert risk_label_from_proba(0.39) == "low"

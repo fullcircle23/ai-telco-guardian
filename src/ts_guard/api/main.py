@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 import os
+
 import joblib
 import pandas as pd
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from dotenv import load_dotenv
 
 from .llm_provider import chat
 
@@ -24,13 +25,17 @@ APP.add_middleware(
 
 # ---------- Lazy helpers ----------
 
+
 def _get_rag():
     """Import RAG only when an endpoint needs it."""
     try:
-        from .rag_qa import answer as rag_answer, search as rag_search
+        from .rag_qa import answer as rag_answer
+        from .rag_qa import search as rag_search
+
         return rag_answer, rag_search
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"RAG backend unavailable: {e}")
+
 
 def _detect_lang(text: str) -> str:
     """Best-effort language detection; default to 'en' if unavailable/fails."""
@@ -43,10 +48,12 @@ def _detect_lang(text: str) -> str:
     except Exception:
         return "en"
 
+
 # ---------- Model utilities ----------
 
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "ml", "model.joblib")
 _model = None
+
 
 def _load_model():
     global _model
@@ -57,7 +64,9 @@ def _load_model():
             raise HTTPException(status_code=503, detail=f"Model not available: {e}")
     return _model
 
+
 # ---------- Schemas ----------
+
 
 class CallMeta(BaseModel):
     caller: str = Field(..., examples=["+60123456789"])
@@ -70,13 +79,16 @@ class CallMeta(BaseModel):
     pct_answered_last_7d: float = Field(..., ge=0, le=1)
     complaints_last_7d: int = 1
 
+
 class RiskResponse(BaseModel):
     risk_score: float
     risk_label: str
 
+
 class TriageRequest(BaseModel):
     complaint_text: str
     meta: CallMeta | None = None
+
 
 class TriageJSON(BaseModel):
     summary: str
@@ -86,15 +98,19 @@ class TriageJSON(BaseModel):
     sms_ms: str
     confidence: float
 
+
 def risk_label_from_proba(proba: float) -> str:
     return "high" if proba >= 0.7 else "medium" if proba >= 0.4 else "low"
 
+
 # ---------- Routes ----------
+
 
 @APP.get("/health", tags=["health"])
 @APP.get("/healthz", tags=["health"])
 def health():
     return {"ok": True}
+
 
 @APP.post("/predict_call_risk", response_model=RiskResponse)
 def predict_call_risk(meta: CallMeta):
@@ -113,6 +129,7 @@ def predict_call_risk(meta: CallMeta):
     proba = float(model.predict_proba(X)[0, 1])
     return {"risk_score": proba, "risk_label": risk_label_from_proba(proba)}
 
+
 @APP.post("/triage")
 def triage(req: TriageRequest):
     rag_answer, _ = _get_rag()
@@ -124,11 +141,13 @@ def triage(req: TriageRequest):
         tri = {"raw": out}
     return {"triage": tri, "language": lang}
 
+
 @APP.get("/rag/search")
 def rag_search_endpoint(q: str, k: int = 5):
     _, rag_search = _get_rag()
     res = rag_search(q=q, k=k)
     return {"results": [{"snippet": s, "source": src} for s, src in res]}
+
 
 @APP.get("/rag/answer")
 def rag_answer_endpoint(q: str, k: int = 3):

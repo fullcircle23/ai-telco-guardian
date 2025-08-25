@@ -1,12 +1,16 @@
+import glob
+import os
+import uuid
 
-import os, glob, uuid, chromadb
-from sentence_transformers import SentenceTransformer
+import chromadb
 from pypdf import PdfReader
+from sentence_transformers import SentenceTransformer
 
 BASE_DIR = os.path.dirname(__file__)
 KB_DIR = os.path.join(BASE_DIR, "kb")
 CHROMA_DIR = os.path.join(BASE_DIR, "chroma")
 EMBED_MODEL = os.getenv("EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+
 
 def load_docs():
     docs = []
@@ -17,18 +21,20 @@ def load_docs():
                 txt = page.extract_text() or ""
                 if txt.strip():
                     docs.append((txt, f"{os.path.basename(path)}#p{i+1}"))
-        elif path.lower().endswith((".md",".txt",".rtf",".markdown")):
+        elif path.lower().endswith((".md", ".txt", ".rtf", ".markdown")):
             with open(path, "r", encoding="utf-8", errors="ignore") as f:
                 docs.append((f.read(), os.path.basename(path)))
     return docs
+
 
 def chunk(text, n=1500, overlap=250):
     i = 0
     L = len(text)
     while i < L:
-        yield text[i:i+n]
+        yield text[i : i + n]
         i += max(1, n - overlap)
     return
+
 
 def main():
     os.makedirs(CHROMA_DIR, exist_ok=True)
@@ -54,6 +60,7 @@ def main():
     embeds = model.encode(chunks).tolist()
     coll.add(ids=ids, documents=chunks, embeddings=embeds, metadatas=metas)
     print(f"Indexed {len(chunks)} chunks from {len(docs)} docs.")
+
 
 if __name__ == "__main__":
     main()

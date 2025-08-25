@@ -1,5 +1,8 @@
+import os
 
-import os, requests, streamlit as st
+import requests
+import streamlit as st
+
 API_BASE_DEFAULT = os.getenv("API_BASE_URL", "http://localhost:8000")
 st.set_page_config(page_title="TS-Guard", layout="wide")
 st.title("TS-Guard: Telco Scam Early‑Warning & Triage")
@@ -20,10 +23,15 @@ with tabs[0]:
         submitted = st.form_submit_button("Score")
     if submitted:
         payload = {
-            "caller": caller, "callee": callee, "duration_sec": duration,
-            "hour_of_day": hour, "country_code": "MY", "is_outbound": is_outbound,
-            "recent_calls_from_caller_24h": recent_calls, "pct_answered_last_7d": pct_ans7,
-            "complaints_last_7d": complaints7
+            "caller": caller,
+            "callee": callee,
+            "duration_sec": duration,
+            "hour_of_day": hour,
+            "country_code": "MY",
+            "is_outbound": is_outbound,
+            "recent_calls_from_caller_24h": recent_calls,
+            "pct_answered_last_7d": pct_ans7,
+            "complaints_last_7d": complaints7,
         }
         r = requests.post(f"{API_BASE}/predict_call_risk", json=payload, timeout=60)
         if r.ok:
@@ -34,15 +42,28 @@ with tabs[0]:
 
 with tabs[1]:
     st.subheader("LLM‑powered Triage (EN + BM)")
-    complaint = st.text_area("Complaint / transcript", height=180,
-                             placeholder="Caller asked for TAC code and claimed to be from bank...")
+    complaint = st.text_area(
+        "Complaint / transcript",
+        height=180,
+        placeholder="Caller asked for TAC code and claimed to be from bank...",
+    )
     meta = {
-        "caller":"+60123456789","callee":"+60388888888","duration_sec":45,"hour_of_day":10,
-        "country_code":"MY","is_outbound":False,"recent_calls_from_caller_24h":8,
-        "pct_answered_last_7d":0.5,"complaints_last_7d":1
+        "caller": "+60123456789",
+        "callee": "+60388888888",
+        "duration_sec": 45,
+        "hour_of_day": 10,
+        "country_code": "MY",
+        "is_outbound": False,
+        "recent_calls_from_caller_24h": 8,
+        "pct_answered_last_7d": 0.5,
+        "complaints_last_7d": 1,
     }
     if st.button("Run Triage"):
-        r = requests.post(f"{API_BASE}/triage", json={"complaint_text": complaint, "meta": meta}, timeout=120)
+        r = requests.post(
+            f"{API_BASE}/triage",
+            json={"complaint_text": complaint, "meta": meta},
+            timeout=120,
+        )
         if r.ok:
             out = r.json()
             st.json(out["triage"])
@@ -58,6 +79,6 @@ with tabs[2]:
         if r.ok:
             for item in r.json().get("results", []):
                 st.write("•", item["snippet"])
-                st.caption(item.get("source","kb"))
+                st.caption(item.get("source", "kb"))
         else:
             st.error(f"Error {r.status_code}: {r.text[:300]}")
