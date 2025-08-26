@@ -1,13 +1,52 @@
 import json
 import os
 import re
-from typing import List, Tuple, TYPE_CHECKING
+from typing import Callable, List, Optional, Tuple
 
+_CODE_FENCE_RE = re.compile(r"^```[a-zA-Z0-9_-]*\s*|\s*```$")
 RE_SPACE = re.compile(r"\s+")
 
-if TYPE_CHECKING:
-    # for type hints only; not imported at runtime
-    from sentence_transformers import SentenceTransformer
+
+def _extract_json(text: str) -> Optional[dict]:
+    """
+    Try to recover a JSON object from model output that may be wrapped in
+    code fences (```json ... ```), include a language tag, or have prose.
+    """
+    if not text:
+        return None
+
+    # 1) Strip code fences (with or without 'json' tag)
+    stripped = _CODE_FENCE_RE.sub("", text).strip()
+
+    # 2) Find the first balanced {...} block
+    start = stripped.find("{")
+    if start == -1:
+        return None
+    depth = 0
+    for i, ch in enumerate(stripped[start:], start=start):
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                candidate = stripped[start : i + 1]
+                try:
+                    return json.loads(candidate)
+                except Exception:
+                    break  # fall through to final attempt
+
+    # 3) Last chance: try the whole stripped string
+    try:
+        return json.loads(stripped)
+    except Exception:
+        return None
+
+
+# Note: avoid importing SentenceTransformer even under TYPE_CHECKING
+# to keep flake8 clean.
+# If you need type hints, use string annotations like:
+# _model: "SentenceTransformer | None"
+
 
 def _require_chroma():
     """
@@ -56,16 +95,13 @@ def _lazy_init():
         try:
             _client = chroma.PersistentClient(path=CHROMA_DIR)
         except Exception as e:
-            raise RuntimeError(
-            f"Failed to open ChromaDB at {CHROMA_DIR!r}: {e}"
-            ) from e
+            raise RuntimeError(f"Failed to open ChromaDB at {CHROMA_DIR!r}: {e}") from e
     if _coll is None:
         try:
             _coll = _client.get_or_create_collection("kb")
         except Exception as e:
             raise RuntimeError(
-                "Failed to get or create ChromaDB collection 'kb': "
-                f"{e}"
+                "Failed to get or create ChromaDB collection 'kb': " f"{e}"
             ) from e
 
 
@@ -98,13 +134,19 @@ def search(query: str, k: int = 5) -> List[Tuple[str, str]]:
     return list(zip(docs, [m.get("source", "kb") for m in metas]))
 
 
-def answer(user_text: str, lang_hint: str = "en", chat_fn=None) -> dict:
-    ST = _require_sbert()  # Using ST avoids the F401 “imported but unused” warning.
+def answer(
+    user_text: str,
+    lang_hint: str = "en",
+    chat_fn: Optional[Callable[[list[dict]], str]] = None,
+    k: int = 4,
+) -> dict:
+    _lazy_init()
     try:
-        kb = search(user_text, k=4)
+        kb = search(user_text, k=k)
         kb_snips = [d for d, _ in kb]
     except Exception:
         kb_snips = []
+
     prompt = build_prompt(user_text, kb_snips, lang_hint)
     messages = [
         {
@@ -113,21 +155,25 @@ def answer(user_text: str, lang_hint: str = "en", chat_fn=None) -> dict:
         },
         {"role": "user", "content": prompt},
     ]
-    raw = (chat_fn or (lambda m: "{}"))(messages).strip()
-    if raw.startswith("```"):
-        parts = raw.split("```")
-        raw = parts[1] if len(parts) > 1 else raw
+
     try:
-        return json.loads(raw)
+        raw = (chat_fn or (lambda m: "{}"))(messages).strip()
     except Exception:
-        return {
-            "summary": raw[:400],
-            "scam_type": "unknown",
-            "actions": [],
-            "sms_en": "",
-            "sms_ms": "",
-            "confidence": 0.2,
-        }
+        raw = "{}"
+
+    parsed = _extract_json(raw)
+    if parsed is not None:
+        return parsed
+
+    # Fallback if model didn’t return valid JSON
+    return {
+        "summary": (raw or "")[:400],
+        "scam_type": "unknown",
+        "actions": [],
+        "sms_en": "",
+        "sms_ms": "",
+        "confidence": 0.2,
+    }
 
 
 def _clean_join_snippets(kb_snippets: list[str] | None, limit: int = 700) -> str:

@@ -1,7 +1,10 @@
 # src/ts_guard/api/main.py
 from __future__ import annotations
 
+import importlib
+import importlib.util
 import os
+from functools import lru_cache
 
 import joblib
 import pandas as pd
@@ -37,14 +40,22 @@ def _get_rag():
         raise HTTPException(status_code=503, detail=f"RAG backend unavailable: {e}")
 
 
-def _detect_lang(text: str) -> str:
-    """Best-effort language detection; default to 'en' if unavailable/fails."""
+@lru_cache(maxsize=1)
+def _load_langdetect():
+    if importlib.util.find_spec("langdetect") is None:
+        return None
     try:
-        from langdetect import detect as _detect
+        return importlib.import_module("langdetect")
     except Exception:
+        return None
+
+
+def _detect_lang(text: str) -> str:
+    ld = _load_langdetect()
+    if not ld:
         return "en"
     try:
-        return _detect(text or "")
+        return ld.detect(text or "")
     except Exception:
         return "en"
 
@@ -146,10 +157,11 @@ def triage(req: TriageRequest):
 def rag_search_endpoint(q: str, k: int = 5):
     _, rag_search = _get_rag()
     try:
-        return {"results": [{"snippet": s, "source": src} for s, src in rag_search(q, k)]}
+        return {
+            "results": [{"snippet": s, "source": src} for s, src in rag_search(q, k)]
+        }
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=f"RAG backend unavailable: {e}")
-
 
 
 @APP.get("/rag/answer")
