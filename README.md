@@ -1,4 +1,4 @@
-
+![CI](https://github.com/fullcircle23/ai-telco-guardian/actions/workflows/ci.yml/badge.svg)
 # TS-Guard (Telco Scam Early‑Warning & Triage)
 
 A real, runnable reference system that blends a **tabular ML risk model** with **LLM‑powered triage and RAG**, exposed via **FastAPI** and a **Streamlit** UI.
