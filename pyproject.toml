@@ -16,6 +16,7 @@ rag = [
   "sentence-transformers>=3.0",
   "chromadb==0.5.5",
 ]
+dev = ["pytest-cov>=5.0"]
 
 [tool.black]
 target-version = ["py311"]
