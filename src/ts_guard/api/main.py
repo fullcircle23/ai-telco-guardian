@@ -145,8 +145,11 @@ def triage(req: TriageRequest):
 @APP.get("/rag/search")
 def rag_search_endpoint(q: str, k: int = 5):
     _, rag_search = _get_rag()
-    res = rag_search(q=q, k=k)
-    return {"results": [{"snippet": s, "source": src} for s, src in res]}
+    try:
+        return {"results": [{"snippet": s, "source": src} for s, src in rag_search(q, k)]}
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=f"RAG backend unavailable: {e}")
+
 
 
 @APP.get("/rag/answer")

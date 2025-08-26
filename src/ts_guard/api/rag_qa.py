@@ -1,7 +1,6 @@
 import json
 import os
 import re
-import chromadb
 from typing import List, Tuple, TYPE_CHECKING
 
 RE_SPACE = re.compile(r"\s+")
@@ -9,6 +8,21 @@ RE_SPACE = re.compile(r"\s+")
 if TYPE_CHECKING:
     # for type hints only; not imported at runtime
     from sentence_transformers import SentenceTransformer
+
+def _require_chroma():
+    """
+    Import chromadb only when needed and raise a clear error if missing.
+    """
+    try:
+        import chromadb  # type: ignore
+    except Exception as e:
+        raise RuntimeError(
+            "ChromaDB is not installed. Install with either:\n"
+            "  pip install -e '.[rag]'\n"
+            "or\n"
+            "  pip install 'chromadb>=1.0.13'\n"
+        ) from e
+    return chromadb
 
 
 CHROMA_DIR = os.path.join(os.path.dirname(__file__), "..", "rag", "chroma")
@@ -38,9 +52,21 @@ def _lazy_init():
         ST = _require_sbert()
         _model = ST(EMBED_MODEL)
     if _client is None:
-        _client = chromadb.PersistentClient(path=CHROMA_DIR)
+        chroma = _require_chroma()
+        try:
+            _client = chroma.PersistentClient(path=CHROMA_DIR)
+        except Exception as e:
+            raise RuntimeError(
+            f"Failed to open ChromaDB at {CHROMA_DIR!r}: {e}"
+            ) from e
     if _coll is None:
-        _coll = _client.get_or_create_collection("kb")
+        try:
+            _coll = _client.get_or_create_collection("kb")
+        except Exception as e:
+            raise RuntimeError(
+                "Failed to get or create ChromaDB collection 'kb': "
+                f"{e}"
+            ) from e
 
 
 def embed(texts: List[str]):
